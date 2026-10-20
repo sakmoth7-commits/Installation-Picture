@@ -134,7 +134,7 @@
     <h4 class="text-center fw-bold mb-1">Installation Tracker</h4>
     <p class="text-center text-muted mb-4">Sign in to continue</p>
 
-    <label class="form-label">Username</label>
+    <label class="form-label">Staff name</label>
     <input id="loginUser" class="form-control mb-3" autocomplete="username" autocapitalize="none" required>
 
     <label class="form-label">PIN</label>
@@ -181,8 +181,8 @@
       <div class="card-x">
         <div class="row g-2 align-items-end">
           <div class="col-6 col-md-3" id="userFilterWrap">
-            <label class="form-label">User</label>
-            <select id="fUser" class="form-select"><option value="">All users</option></select>
+            <label class="form-label">Staff</label>
+            <select id="fUser" class="form-select"><option value="">All staff</option></select>
           </div>
           <div class="col-6 col-md-3">
             <label class="form-label">Period</label>
@@ -203,7 +203,7 @@
       </div>
 
       <div class="card-x hidden" id="chartCard">
-        <div class="fw-bold mb-2"><i class="bi bi-bar-chart-line me-1"></i>Installations by user</div>
+        <div class="fw-bold mb-2"><i class="bi bi-bar-chart-line me-1"></i>Installations by staff</div>
         <div style="height:230px"><canvas id="chart"></canvas></div>
       </div>
 
@@ -214,7 +214,7 @@
         </div>
         <div class="table-responsive">
           <table class="table table-hover mb-0">
-            <thead><tr><th>Date</th><th>User</th><th>Business</th><th>Merchant</th><th>MID</th><th>Remarks</th><th>📷</th></tr></thead>
+            <thead><tr><th>Date</th><th>Staff</th><th>Business</th><th>Merchant</th><th>MID</th><th>Remarks</th><th>📷</th></tr></thead>
             <tbody id="recBody"></tbody>
           </table>
         </div>
@@ -244,7 +244,7 @@
 
       <div class="card-x">
         <div class="d-flex justify-content-between align-items-center mb-2">
-          <div class="fw-bold"><i class="bi bi-people me-1"></i>Users</div>
+          <div class="fw-bold"><i class="bi bi-people me-1"></i>Staff</div>
           <button class="btn btn-brand btn-sm px-3" id="addUserBtn"><i class="bi bi-person-plus me-1"></i>Add</button>
         </div>
         <div id="userList"></div>
@@ -255,7 +255,7 @@
   <nav class="bottom-nav">
     <button data-tab="new" class="active"><i class="bi bi-plus-circle-fill"></i>New</button>
     <button data-tab="records"><i class="bi bi-table"></i>Records</button>
-    <button data-tab="users" id="navUsers" class="hidden"><i class="bi bi-people-fill"></i>Users</button>
+    <button data-tab="users" id="navUsers" class="hidden"><i class="bi bi-people-fill"></i>Staff</button>
   </nav>
 </div>
 
@@ -281,12 +281,12 @@
   <div class="modal-dialog modal-dialog-centered">
     <form class="modal-content" id="userForm" style="border-radius:20px">
       <div class="modal-header border-0 pb-0">
-        <h6 class="modal-title fw-bold" id="userModalTitle">Add user</h6>
+        <h6 class="modal-title fw-bold" id="userModalTitle">Add staff</h6>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
         <input type="hidden" id="uOriginal">
-        <label class="form-label">Username</label>
+        <label class="form-label">Staff name</label>
         <input id="uName" class="form-control mb-3" autocapitalize="none" required>
         <label class="form-label">PIN <span class="text-muted text-lowercase" id="uPinHint">(4–12 digits)</span></label>
         <input id="uPin" class="form-control mb-3" inputmode="numeric" autocomplete="off">
@@ -325,9 +325,10 @@ const show = (el, on = true) => el.classList.toggle('hidden', !on);
 
 const S = { token: null, user: null, cards: [], seq: 0, rows: [], chart: null, scanTarget: null, reader: null };
 const MAX_PHOTOS = 10;
+const MAX_MERCHANTS = 10;
 
 // Paste your Apps Script Web app URL (ends with /exec) here:
-const API_URL = 'https://script.google.com/macros/s/AKfycbxVQPXrG5NS7Q7Mw_3NV44zyLNOrptGF6lHKNt8N86LvYldgI33Xwo1lq1UtZR6KfLm/exec';
+const API_URL = 'https://script.google.com/macros/library/d/1MQFpyC93g6tTb_Cio06wbfsp9jYJXxH89mpKmxYjH6zabSfi7oHE-XxO/5';
 
 async function api(fn, ...args) {
   let json;
@@ -445,12 +446,23 @@ function parseKHQR(text) {
   if (!mid && top['29']) { const s = parseTLV(top['29']); mid = s['01'] || s['00'] || ''; }
   return { name, mid };
 }
+const NOQR = 'No QR found';
+function setQRFields(card, name, mid) {
+  const n = $('.f-name', card.el), m = $('.f-mid', card.el);
+  // Overwrite with new values; clear an old "No QR found" marker; leave manual text alone otherwise.
+  if (name) n.value = name; else if (n.value === NOQR) n.value = '';
+  if (mid) m.value = mid; else if (m.value === NOQR) m.value = '';
+}
+function markNoQR(card) {
+  $('.f-name', card.el).value = NOQR;
+  $('.f-mid', card.el).value = NOQR;
+}
 function applyQR(card, text) {
   const r = parseKHQR(text);
-  if (!r || (!r.name && !r.mid)) { toast('QR read, but it is not a KHQR code.', 'warning'); return; }
-  if (r.name) $('.f-name', card.el).value = r.name;
-  if (r.mid) $('.f-mid', card.el).value = r.mid;
+  if (!r || (!r.name && !r.mid)) { markNoQR(card); toast('QR read, but it is not a KHQR code.', 'warning'); return false; }
+  setQRFields(card, r.name, r.mid);
   toast('QR filled: ' + (r.name || r.mid), 'success');
+  return true;
 }
 
 /* ---- camera ---- */
@@ -472,15 +484,44 @@ $('#scanModal').addEventListener('shown.bs.modal', startScan);
 $('#scanModal').addEventListener('hidden.bs.modal', stopScan);
 
 /* ---- upload screenshot ---- */
+function loadImage(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => resolve({ img, url });
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Unreadable image')); };
+    img.src = url;
+  });
+}
+function scaledDataUrl(img, maxSide) {
+  const r = maxSide / Math.max(img.naturalWidth, img.naturalHeight);
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(img.naturalWidth * r));
+  c.height = Math.max(1, Math.round(img.naturalHeight * r));
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+  ctx.drawImage(img, 0, 0, c.width, c.height);
+  return c.toDataURL('image/png');
+}
 async function decodeFile(card, file) {
   if (!file) return;
-  const url = URL.createObjectURL(file);
+  const btn = $('.btn-upload', card.el);
+  busy(btn, true, 'Reading…');
+  let text = null, loaded = null;
   try {
+    loaded = await loadImage(file);
     const reader = new ZXing.BrowserQRCodeReader();
-    const res = await reader.decodeFromImageUrl(url);
-    applyQR(card, res.getText());
-  } catch (e) { toast('No QR code found in that image.', 'warning'); }
-  URL.revokeObjectURL(url);
+    // 1) original image, 2+) resized copies (helps with huge or tiny screenshots)
+    const sources = [loaded.url, () => scaledDataUrl(loaded.img, 1000), () => scaledDataUrl(loaded.img, 600), () => scaledDataUrl(loaded.img, 1600)];
+    for (const src of sources) {
+      try { text = (await reader.decodeFromImageUrl(typeof src === 'function' ? src() : src)).getText(); break; }
+      catch (e) { /* try next */ }
+    }
+  } catch (e) { /* unreadable image */ }
+  if (loaded) URL.revokeObjectURL(loaded.url);
+  busy(btn, false);
+
+  if (text) applyQR(card, text);
+  else { markNoQR(card); toast('No QR code found in that image.', 'warning'); }
 }
 
 /* ============================ Merchant cards ============================ */
@@ -524,8 +565,17 @@ function addMerchant() {
 }
 function renumber() {
   S.cards.forEach((c, i) => { $('.n', c.el).textContent = i + 1; show($('.btn-remove', c.el), S.cards.length > 1); });
+  if (typeof updateAddBtn === 'function') updateAddBtn();
+}
+function updateAddBtn() {
+  const btn = $('#addMerchantBtn'), full = S.cards.length >= MAX_MERCHANTS;
+  btn.disabled = full;
+  btn.innerHTML = full
+    ? '<i class="bi bi-check2-circle me-1"></i>Maximum ' + MAX_MERCHANTS + ' merchants reached'
+    : '<i class="bi bi-plus-lg me-1"></i>Add another merchant (' + S.cards.length + '/' + MAX_MERCHANTS + ')';
 }
 $('#addMerchantBtn').addEventListener('click', () => {
+  if (S.cards.length >= MAX_MERCHANTS) { toast('You can add up to ' + MAX_MERCHANTS + ' merchants per submission.', 'warning'); return; }
   const c = addMerchant();
   c.el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 });
@@ -584,7 +634,7 @@ $('#submitBtn').addEventListener('click', async () => {
   busy(btn, true, 'Submitting…');
   try {
     const r = await api('submitInstallations', S.token, items);
-    toast('Saved ' + r.saved + ' installation(s). Telegram: ' + r.telegram, 'success');
+    toast('Saved ' + r.saved + ' installation(s). Telegram: ' + r.telegram, /FAILED|not configured/.test(r.telegram) ? 'warning' : 'success');
     $('#merchantList').innerHTML = ''; S.cards = []; addMerchant();
     window.scrollTo({ top: 0, behavior: 'smooth' });
     loadSummary();
@@ -612,7 +662,7 @@ async function loadRecords() {
     S.rows = data.rows;
     if (S.user.role === 'Admin') {
       const sel = $('#fUser'), cur = sel.value;
-      sel.innerHTML = '<option value="">All users</option>' + data.users.map(u => '<option>' + esc(u) + '</option>').join('');
+      sel.innerHTML = '<option value="">All staff</option>' + data.users.map(u => '<option>' + esc(u) + '</option>').join('');
       sel.value = cur;
       drawChart(data.byUser);
     }
@@ -689,14 +739,14 @@ $('#userList').addEventListener('click', async e => {
   if (ed) openUser(S.users[+ed.dataset.edit]);
   if (del) {
     const u = S.users[+del.dataset.del];
-    if (!confirm('Delete user "' + u.username + '"?')) return;
-    try { renderUsers(await api('deleteUser', S.token, u.username)); toast('User deleted', 'success'); }
+    if (!confirm('Delete staff "' + u.username + '"?')) return;
+    try { renderUsers(await api('deleteUser', S.token, u.username)); toast('Staff deleted', 'success'); }
     catch (ex) { toast(ex.message, 'danger'); }
   }
 });
 function openUser(u) {
   show($('#userError'), false);
-  $('#userModalTitle').textContent = u ? 'Edit user' : 'Add user';
+  $('#userModalTitle').textContent = u ? 'Edit staff' : 'Add staff';
   $('#uOriginal').value = u ? u.username : '';
   $('#uName').value = u ? u.username : '';
   $('#uPin').value = '';
@@ -715,7 +765,7 @@ $('#userForm').addEventListener('submit', async e => {
       original: $('#uOriginal').value, username: $('#uName').value, pin: $('#uPin').value,
       role: $('#uRole').value, topicId: $('#uTopic').value
     });
-    renderUsers(list); userModal.hide(); toast('User saved', 'success');
+    renderUsers(list); userModal.hide(); toast('Staff saved', 'success');
   } catch (ex) { err.textContent = ex.message; show(err, true); }
   busy(btn, false);
 });
