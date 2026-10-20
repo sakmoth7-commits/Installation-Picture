@@ -214,7 +214,7 @@
         </div>
         <div class="table-responsive">
           <table class="table table-hover mb-0">
-            <thead><tr><th>Date</th><th>Staff</th><th>Business</th><th>Merchant</th><th>MID</th><th>Remarks</th><th>📷</th></tr></thead>
+            <thead><tr><th>Installed</th><th>Staff</th><th>Business</th><th>Merchant</th><th>MID</th><th>Remarks</th><th>📷</th></tr></thead>
             <tbody id="recBody"></tbody>
           </table>
         </div>
@@ -537,6 +537,7 @@ function addMerchant() {
       '<div class="col-6"><button type="button" class="btn btn-soft w-100 btn-upload"><i class="bi bi-image me-1"></i>Upload QR</button></div>' +
     '</div>' +
     '<input type="file" accept="image/*" class="qr-file hidden">' +
+    '<div class="mb-3"><label class="form-label">Installation date</label><input type="date" class="form-control f-date"></div>' +
     '<div class="mb-3"><label class="form-label">Business name</label><input class="form-control f-biz" value="N/A"></div>' +
     '<div class="mb-3"><label class="form-label">Merchant name</label><input class="form-control f-name" placeholder="Auto-filled from KHQR"></div>' +
     '<div class="mb-3"><label class="form-label">MID</label><input class="form-control f-mid" inputmode="text" placeholder="Auto-filled from KHQR"></div>' +
@@ -548,6 +549,7 @@ function addMerchant() {
     '<div class="photo-grid"></div>';
   $('#merchantList').appendChild(el);
 
+  const dt = $('.f-date', el); dt.value = ymd(new Date()); dt.max = ymd(new Date());
   const card = { id, el, photos: [] };
   S.cards.push(card);
 
@@ -628,7 +630,8 @@ $('#submitBtn').addEventListener('click', async () => {
   for (let i = 0; i < S.cards.length; i++) {
     const c = S.cards[i], g = s => $(s, c.el).value.trim();
     if (!g('.f-name') && !g('.f-mid')) { toast('Merchant ' + (i + 1) + ': enter a merchant name or MID.', 'danger'); c.el.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
-    items.push({ business: g('.f-biz') || 'N/A', merchant: g('.f-name'), mid: g('.f-mid'), remarks: g('.f-rem'), photos: c.photos });
+    if (!g('.f-date')) { toast('Merchant ' + (i + 1) + ': pick the installation date.', 'danger'); c.el.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
+    items.push({ date: g('.f-date'), business: g('.f-biz') || 'N/A', merchant: g('.f-name'), mid: g('.f-mid'), remarks: g('.f-rem'), photos: c.photos });
   }
   const btn = $('#submitBtn');
   busy(btn, true, 'Submitting…');
@@ -678,7 +681,7 @@ function renderRows() {
   const rows = filtered();
   $('#recCount').textContent = rows.length;
   $('#recBody').innerHTML = rows.length ? rows.map(r =>
-    '<tr><td class="text-nowrap">' + esc(r.ts.slice(5, 16)) + '</td><td><span class="pill">' + esc(r.user) + '</span></td><td>' + esc(r.business) +
+    '<tr><td class="text-nowrap">' + esc(r.date || r.ts.slice(0, 10)) + '</td><td><span class="pill">' + esc(r.user) + '</span></td><td>' + esc(r.business) +
     '</td><td class="fw-semibold">' + esc(r.merchant) + '</td><td class="text-nowrap">' + esc(r.mid) + '</td><td>' + esc(r.remarks) + '</td><td>' + (r.photos || '') + '</td></tr>'
   ).join('') : '<tr><td colspan="7"><div class="empty"><i class="bi bi-inbox"></i>No records for this filter</div></td></tr>';
 }
@@ -707,8 +710,8 @@ $('#csvBtn').addEventListener('click', () => {
   const rows = filtered();
   if (!rows.length) { toast('Nothing to export.', 'warning'); return; }
   const cell = v => { v = String(v == null ? '' : v); if (/^[=+\-@]/.test(v)) v = "'" + v; return '"' + v.replace(/"/g, '""') + '"'; };
-  const lines = [['Timestamp', 'User', 'Business', 'Merchant', 'MID', 'Remarks', 'Photos']].concat(
-    rows.map(r => [r.ts, r.user, r.business, r.merchant, r.mid, r.remarks, r.photos]));
+  const lines = [['Installation Date', 'Submitted', 'Staff', 'Business', 'Merchant', 'MID', 'Remarks', 'Photos']].concat(
+    rows.map(r => [r.date || r.ts.slice(0, 10), r.ts, r.user, r.business, r.merchant, r.mid, r.remarks, r.photos]));
   const csv = '\uFEFF' + lines.map(l => l.map(cell).join(',')).join('\r\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
